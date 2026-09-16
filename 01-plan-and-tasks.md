@@ -1,31 +1,37 @@
 # 01 — Plan & task list (drafted 2026-09-16, unstarted)
 
+> **Product mandate (user, 2026-09-16):** "something super user friendly,
+> simple, and extendable" — usable for *anything/everything* by *any* Dogebox
+> owner, not a wow-20-internal tool. Every design choice below serves that.
+
 ## 1. Problem & requirements
 
-**Today (working but limited):** `sync-watch.sh` on the Dogebox greps
-`getblockchaininfo` every 4 h and curls ntfy.sh. Limitations:
-
-- Scoped to one script — every future service (indexer, factory, dogeboxd
-  itself) would copy-paste alert logic.
-- Public relay: the topic string *is* the credential (anyone who knows it can
-  read/post). Already treated as semi-burned (shared with the user's devices).
-- ntfy.sh is a rate-limited free public service — fine for 2 alerts/month,
-  wrong for a real monitoring bus.
+**Today (works, but developer-grade only):** wow-20's `sync-watch.sh` greps
+`getblockchaininfo` every 4 h and curls the public ntfy.sh service. For a
+regular Dogebox owner that path is a non-starter: it needs SSH, hand-written
+curl, and a topic string that doubles as a world-readable password.
 
 **Requirements:**
 - R1: ntfy server runs as a Dogebox pup (NixOS container via dogeboxd), survives
   pup updates and box reboots like the other pups.
 - R2: instant delivery to iOS **and** Android.
-- R3: health bridge converts box events (pup state changes, node sync status,
-  watchdog semantics) into topic pushes.
+- R3: health bridge converts box events into topic pushes — **generic by
+  default**: all pup state changes box-wide (`dogebox-health`), not just
+  wow-20's nodes.
 - R4: wow-20's existing sync-watch behavior is preserved during migration
   (no alert gap), then retired.
-- R5: no new exposed attack surface beyond what's needed (LAN-first; remote
-  access only via VPN, never port-forwarding).
+- R5: no new exposed attack surface (LAN-first; remote access only via VPN,
+  never port-forwarding); auth tokens on by default.
+- **R6 (user-friendly):** a non-technical owner can go install → phone
+  receiving alerts with no terminal: pup-store install, dashboard config,
+  QR/deep-link subscribe, auto-generated tokens.
+- **R7 (extendable):** the stable integration surface for any pup author or
+  script is a single HTTP POST (documented contract, README §extensibility).
+  No SDK, no dogeboxd API knowledge required.
 
 ## 2. Architecture decision
 
-**One pup, two services** (single container, simplest that meets R1–R3):
+**One pup, two services** (single container, simplest that meets R1–R3, R7):
 
 ```
 ┌─ ntfy-pup (NixOS container on Dogebox) ─────────────────┐
@@ -35,52 +41,75 @@
 │    - upstream-base-url: https://ntfy.sh  ← iOS relay     │
 │    - storage: /opt/dogebox/pups/storage/<pup-id>/        │
 │  bridge (small script/daemon, systemd inside pup)        │
-│    - polls dogeboxd pup states + node RPCs               │
+│    - polls dogeboxd pup states (ALL pups, generic)       │
+│    - optional node-RPC checks (wow-20 = one consumer)    │
 │    - pushes to local ntfyd topics:                       │
-│        dogebox-health, wow20-sync                        │
+│        dogebox-health  (auto, every pup)                 │
+│        wow20-sync      (opt-in consumer topic)           │
 └──────────────────────────────────────────────────────────┘
         │ LAN (instant, Android websocket / iOS via relay)
         ▼
-   phones subscribe to http://<box-LAN-IP>:8099/<topic>
+   phones subscribe via QR / ntfy:// deep link
    remote access: Tailscale (recommended) — not port-forwarding
 ```
 
-**The iOS caveat (decides half the design):** Apple doesn't allow third-party
-push servers; self-hosted ntfy gets instant iOS delivery only by relaying
-"check your server" pings through ntfy.sh (`upstream-base-url`). Message
-content stays on our server; ntfy.sh sees only topic hashes. Android needs no
-relay (direct websocket). Alternative — pure self-hosted without relay — costs
-iOS background-polling delays; not acceptable for DOWN alerts.
+## 3. The iOS caveat (decides half the design)
 
-## 3. Task list
+Apple doesn't allow third-party push servers; self-hosted ntfy gets instant
+iOS delivery only by relaying "check your server" pings through ntfy.sh
+(`upstream-base-url`). Message content stays on our server; ntfy.sh sees only
+topic hashes. Android needs no relay (direct websocket). Pure self-hosted
+without relay costs iOS background-polling delays — not acceptable for
+down-alerts. This stays true for every user who installs the pup; document it
+plainly in the pup's README/dashboard blurb.
+
+## 4. UX for non-technical owners (R6 — the product bar)
+
+- **Install:** one click from the pup store (verify the publish path in
+  Phase 0 — how third-party pups reach the store/index).
+- **First-run screen in the Dogebox dashboard:** server URL, one **subscribe
+  QR** (ntfy apps accept `ntfy://<server>/<topic>` deep links), a default
+  device token, and a live "send test notification" button.
+- **Topics:** `dogebox-health` pre-created and auto-wired to the bridge;
+  extra topics are free-form (type a name, get a token).
+- **Defaults that are safe:** auth on, tokens required, LAN binding only.
+- **Copy-paste contract** shown in-dashboard for developers (the one-liner
+  curl from the README).
+
+## 5. Task list
 
 ### Phase 0 — recon (start here)
 - [ ] Read Dogebox master doc pup-authoring sections (`/Volumes/DEV Projects/DOGEBOX/docs/00-dogebox-master-context.md`)
 - [ ] Study reference pup repo: `PennybagsCX/dogebox-core-txindex-pup` (manifest format, storage mapping, build flow)
+- [ ] **Pup UI capability:** can a pup render a config/first-run screen in the Dogebox dashboard? (R6 hinges on this; if not, fall back to a small web UI served by the pup itself)
+- [ ] **Pup-store publishing path:** how does a third-party pup become installable by other users?
 - [ ] Confirm pup port allocation scheme + how dogeboxd exposes pup ports on LAN
-- [ ] Confirm how pups get outbound network (bridge needs to reach ntfy.sh relay + local RPCs)
+- [ ] Confirm how pups get outbound network (bridge needs the ntfy.sh relay + local RPCs)
 
 ### Phase 1 — ntfy server pup
 - [ ] Pup manifest + NixOS container config packaging `ntfy` (single static binary)
 - [ ] `server.yml`: base-url, listen :8099, auth=true (tokens), attachment cache off, upstream-base-url for iOS
 - [ ] Persistent storage dir wired through dogeboxd
+- [ ] First-run UX: dashboard screen with server URL + subscribe QR + device token + "send test" button (see §4; fall back to pup-served web UI if no dashboard hook)
 - [ ] Deploy to box; create per-device access tokens
 - [ ] Test: publish from box → Android instant; iPhone instant (verify relay path)
 - [ ] Test: box reboot → pup returns automatically (R1)
 
-### Phase 2 — health bridge
-- [ ] Bridge v1: port sync-watch.sh semantics (RPC reachable / ibd flag / down+recover edge-detection) → topic `wow20-sync`, targeting the testnet3 node AND the mainnet txindex node
-- [ ] Bridge v2: dogeboxd pup state watcher → topic `dogebox-health` (pup crashed / restarted / update-available)
-- [ ] Duplicate-suppression + severity (priority) conventions documented
+### Phase 2 — health bridge (generic)
+- [ ] Bridge v1: dogeboxd pup state watcher → topic `dogebox-health` (any pup crashed / restarted / update-available) — this is the box-wide feature every user gets for free
+- [ ] Bridge v2: port sync-watch.sh semantics (RPC reachable / ibd flag / down+recover edge-detection) as an **opt-in consumer check** → topic `wow20-sync` (testnet3 AND mainnet txindex nodes) — wow-20 becomes just another user of the platform
+- [ ] Duplicate-suppression + severity (priority) conventions documented in the pup README
 - [ ] Run in parallel with sync-watch.sh for ≥48 h — verify no missed/dupe alerts (R4)
 
-### Phase 3 — cutover & wow-20 integration
+### Phase 3 — cutover, wow-20 integration, publish
 - [ ] Re-point phones to self-hosted topics; retire public topic (rotate: consider it burned)
 - [ ] Remove sync-watch.sh + its timer; replace with bridge (update wow-20 `08-infrastructure-status.md` §7)
-- [ ] wow-20 indexer/factory/oracle: adopt ntfy publish as their alert path
-- [ ] Commit + push (private repo), update docs
+- [ ] wow-20 indexer/factory/oracle: adopt the one-POST contract as their alert path
+- [ ] Publish the pup (pup store / index per Phase 0 findings); user-facing README: install → scan QR → done
+- [ ] Commit + push (private repo during development), update docs
 
-## 4. Open decisions (make in-session)
+## 6. Open decisions (make in-session)
 - Expose beyond LAN? Recommend: Tailscale on box + phones; no port-forward.
 - Retention/cache window on the server (affects backfill-on-subscribe behavior seen 2026-09-16).
 - One pup or two (server vs bridge separate)? Start one; split if bridge instability threatens the server.
+- Default priority/notification conventions for `dogebox-health` (min priority so iOS delivers silently vs loudly?).
