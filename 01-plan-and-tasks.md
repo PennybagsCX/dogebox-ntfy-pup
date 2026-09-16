@@ -16,10 +16,11 @@ curl, and a topic string that doubles as a world-readable password.
   pup updates and box reboots like the other pups.
 - R2: instant delivery to iOS **and** Android.
 - R3: health bridge converts box events into topic pushes — **generic by
-  default**: all pup state changes box-wide (`dogebox-health`), not just
-  wow-20's nodes.
+  default**: all pup state changes box-wide (`dogebox-health`). **No
+  project-specific topics ship with the pup.**
 - R4: wow-20's existing sync-watch behavior is preserved during migration
-  (no alert gap), then retired.
+  (no alert gap), then retired. (Migration is a wow-20-side concern — nothing
+  wow-20-specific ships in the pup.)
 - R5: no new exposed attack surface (LAN-first; remote access only via VPN,
   never port-forwarding); auth tokens on by default.
 - **R6 (user-friendly):** a non-technical owner can go install → phone
@@ -42,10 +43,12 @@ curl, and a topic string that doubles as a world-readable password.
 │    - storage: /opt/dogebox/pups/storage/<pup-id>/        │
 │  bridge (small script/daemon, systemd inside pup)        │
 │    - polls dogeboxd pup states (ALL pups, generic)       │
-│    - optional node-RPC checks (wow-20 = one consumer)    │
-│    - pushes to local ntfyd topics:                       │
+│    - pushes to local ntfyd topic:                        │
 │        dogebox-health  (auto, every pup)                 │
-│        wow20-sync      (opt-in consumer topic)           │
+│                                                          │
+│  Consumer-specific checks (e.g. wow-20 node sync) are    │
+│  NOT part of the shipped pup — they live on the          │
+│  consumer's side and POST via the one-line contract.     │
 └──────────────────────────────────────────────────────────┘
         │ LAN (instant, Android websocket / iOS via relay)
         ▼
@@ -95,11 +98,11 @@ plainly in the pup's README/dashboard blurb.
 - [ ] Test: publish from box → Android instant; iPhone instant (verify relay path)
 - [ ] Test: box reboot → pup returns automatically (R1)
 
-### Phase 2 — health bridge (generic)
-- [ ] Bridge v1: dogeboxd pup state watcher → topic `dogebox-health` (any pup crashed / restarted / update-available) — this is the box-wide feature every user gets for free
-- [ ] Bridge v2: port sync-watch.sh semantics (RPC reachable / ibd flag / down+recover edge-detection) as an **opt-in consumer check** → topic `wow20-sync` (testnet3 AND mainnet txindex nodes) — wow-20 becomes just another user of the platform
+### Phase 2 — health bridge (generic only)
+- [ ] Bridge: dogeboxd pup state watcher → topic `dogebox-health` (any pup crashed / restarted / update-available) — the box-wide feature every user gets for free
 - [ ] Duplicate-suppression + severity (priority) conventions documented in the pup README
-- [ ] Run in parallel with sync-watch.sh for ≥48 h — verify no missed/dupe alerts (R4)
+- [ ] Run the pup's health alerts in parallel with the old alert stack for ≥48 h — verify no missed/dupe alerts (R4)
+- [ ] **Wow-20 side — private consumer, NOT shipped in the pup:** evolve `sync-watch.sh` into a script that POSTs its node checks (RPC reachable / ibd flag / down+recover edge-detection) to the pup's local server via the one-line contract, covering the testnet3 AND mainnet txindex nodes
 
 ### Phase 3 — cutover, wow-20 integration, publish
 - [ ] Re-point phones to self-hosted topics; retire public topic (rotate: consider it burned)
