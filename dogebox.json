@@ -1,0 +1,10 @@
+{
+  "id": "pennybags.pups.ntfy",
+  "name": "pennybags — ntfy",
+  "description": "Self-hosted ntfy notification hub: push alerts from any pup, service or script on the box straight to your phone",
+  "pups": [
+    {
+      "location": "ntfy"
+    }
+  ]
+}

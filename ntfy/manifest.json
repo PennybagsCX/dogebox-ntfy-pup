@@ -1,0 +1,91 @@
+{
+  "manifestVersion": 1,
+  "meta": {
+    "name": "ntfy",
+    "version": "0.0.1",
+    "logoPath": "logo.png",
+    "shortDescription": "Self-hosted push notifications: anything on your box can ping your phone",
+    "longDescription": "Runs your own ntfy notification server. Any pup, service or script on the box can send a push notification to your phone with one HTTP POST — pup crashes, recoveries and updates arrive automatically via the built-in health bridge. Private (token auth, deny-all by default), LAN-first, iOS + Android instant delivery.",
+    "upstreamVersions": {
+      "ntfy": "2.28.0"
+    }
+  },
+  "config": {
+    "showOnInstall": false,
+    "sections": [
+      {
+        "name": "server",
+        "label": "Server URL",
+        "fields": [
+          {
+            "label": "Server base URL",
+            "name": "BASE_URL",
+            "type": "text",
+            "required": false,
+            "default": "",
+            "help": "Where phones reach this server, e.g. http://192.168.1.50:8099. Leave empty to auto-detect from the box's IP."
+          }
+        ]
+      }
+    ]
+  },
+  "container": {
+    "build": {
+      "nixFile": "pup.nix",
+      "nixFileSha256": "4d62ac48dd2ab4391a06b05e2337973a79e8e06fb0cb6583555afa8814ff47fd"
+    },
+    "services": [
+      {
+        "name": "ntfy",
+        "command": {
+          "exec": "/bin/run.sh",
+          "cwd": "",
+          "env": null
+        }
+      },
+      {
+        "name": "frontdoor",
+        "command": {
+          "exec": "/bin/frontdoor",
+          "cwd": "",
+          "env": null
+        }
+      },
+      {
+        "name": "bridge",
+        "command": {
+          "exec": "/bin/bridge",
+          "cwd": "",
+          "env": null
+        }
+      }
+    ],
+    "exposes": [
+      {
+        "name": "web",
+        "type": "http",
+        "port": 8099,
+        "interfaces": null,
+        "listenOnHost": true,
+        "webUI": true
+      }
+    ],
+    "requiresInternet": true
+  },
+  "interfaces": null,
+  "dependencies": null,
+  "metrics": [
+    {
+      "name": "healthy",
+      "label": "ntfy healthy",
+      "type": "string",
+      "history": 1
+    },
+    {
+      "name": "subscribers",
+      "label": "Live subscribers",
+      "type": "int",
+      "history": 1
+    }
+  ]
+}
