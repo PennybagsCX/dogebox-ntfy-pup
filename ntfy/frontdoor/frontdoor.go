@@ -35,8 +35,9 @@ import (
 )
 
 const (
-	topic   = "dogebox-health"
-	brandDS = "#C2A633"
+	topic       = "dogebox-health"
+	displayName = "Dogebox health"
+	brandDS     = "#C2A633"
 )
 
 var (
@@ -321,11 +322,14 @@ func dogeboxdTokenValid(token string) error {
 	}
 }
 
-// hostAllowed reports whether the Host header names this box the way a LAN
-// user reaches it: an IP literal in private or loopback space, "localhost",
-// or the configured BASE_URL hostname. A DNS-rebinding page can only attack
-// us with a hostname in Host (a browser fetching the box by IP sends that
-// IP), so routable hostnames are refused. DBX_PUP_IP is always a private
+// hostAllowed reports whether the Host header names this box the way a trusted
+// user reaches it: an IP literal in private, loopback, or CGNAT space,
+// "localhost", or the configured BASE_URL hostname. CGNAT (RFC 6598,
+// 100.64.0.0/10) is the range overlay VPNs like Tailscale use — a box reached
+// over the owner's tailnet is as trusted as the LAN, and without this check
+// those users got the hidden page. A DNS-rebinding page can only attack us
+// with a hostname in Host (a browser fetching the box by IP sends that IP),
+// so routable hostnames are still refused. DBX_PUP_IP is always a private
 // container IP, so the private-range check covers it.
 func hostAllowed(host string) bool {
 	if host == "" {
@@ -339,7 +343,7 @@ func hostAllowed(host string) bool {
 		return true
 	}
 	if ip := net.ParseIP(host); ip != nil {
-		return ip.IsPrivate() || ip.IsLoopback()
+		return ip.IsPrivate() || ip.IsLoopback() || isCGNAT(ip)
 	}
 	if base := envOr("BASE_URL", ""); base != "" {
 		if u, err := url.Parse(base); err == nil && strings.EqualFold(u.Hostname(), host) {
@@ -347,6 +351,32 @@ func hostAllowed(host string) bool {
 		}
 	}
 	return false
+}
+
+// isCGNAT reports RFC 6598 shared address space (100.64.0.0/10).
+func isCGNAT(ip net.IP) bool {
+	v4 := ip.To4()
+	return v4 != nil && v4[0] == 100 && v4[1] >= 64 && v4[1] < 128
+}
+
+// pickHost chooses the address the QR and the copy-paste server URL
+// advertise: the configured BASE_URL wins — it is the address the owner says
+// phones can actually reach (LAN IP, Tailscale, …). Behind the dashboard
+// proxy the request Host is dogeboxd's, and the raw pup IP (DBX_PUP_IP) is
+// unroutable from any phone, so those are only fallbacks. Sanitized with
+// hostRE either way.
+func pickHost(r *http.Request) string {
+	if base := envOr("BASE_URL", ""); base != "" {
+		if u, err := url.Parse(base); err == nil && u.Host != "" {
+			if h := hostRE.ReplaceAllString(u.Host, ""); h != "" {
+				return h
+			}
+		}
+	}
+	if h := hostRE.ReplaceAllString(r.Host, ""); h != "" {
+		return h
+	}
+	return hostRE.ReplaceAllString(net.JoinHostPort(os.Getenv("DBX_PUP_IP"), envOr("FRONTDOOR_PORT", "8099")), "")
 }
 
 func serveOnboarding(w http.ResponseWriter, r *http.Request, forceShow bool) {
@@ -360,13 +390,22 @@ func serveOnboarding(w http.ResponseWriter, r *http.Request, forceShow bool) {
 		serveHidden(w, "", http.StatusOK)
 		return
 	}
-	host := hostRE.ReplaceAllString(r.Host, "")
-	if host == "" {
-		host = hostRE.ReplaceAllString(net.JoinHostPort(os.Getenv("DBX_PUP_IP"), envOr("FRONTDOOR_PORT", "8099")), "")
+	host := pickHost(r)
+	secure := strings.HasPrefix(strings.ToLower(envOr("BASE_URL", "")), "https://")
+	scheme := "http"
+	if secure {
+		scheme = "https"
 	}
-	hostURL := "http://" + host
+	hostURL := scheme + "://" + host
 	token := readDeviceToken()
-	qrData := "ntfy://" + host + "/" + topic
+	// Deep link per docs.ntfy.sh/subscribe/phone: ntfy:// defaults to HTTPS,
+	// so a plain-HTTP box must say ?secure=false explicitly or the app tries
+	// TLS and fails. display= names the subscription in the app. Deep links
+	// carry no auth — the device token stays a copy-paste step on the page.
+	qrData := "ntfy://" + host + "/" + topic + "?display=" + url.QueryEscape(displayName)
+	if !secure {
+		qrData += "&secure=false"
+	}
 	page := strings.NewReplacer(
 		"{{TOPIC}}", topic,
 		"{{HOST_URL}}", hostURL,

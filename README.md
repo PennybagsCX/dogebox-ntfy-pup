@@ -13,10 +13,18 @@ is public, no third-party account. iOS + Android both get instant delivery.
 1. In the Dogebox dashboard, add this repo as a **Pup Source** and install
    **ntfy** from it.
 2. Click **Launch web** on the pup — its onboarding page opens.
-3. Follow the three steps there: install the ntfy app
+3. Follow the four steps there: install the ntfy app
    ([Android](https://play.google.com/store/apps/details?id=io.heckel.ntfy) ·
-   [iPhone](https://apps.apple.com/app/ntfy/id1625396347)), scan the QR,
-   paste the device token when the app asks. Send the test notification.
+   [iPhone](https://apps.apple.com/app/ntfy/id1625396347)), copy the device
+   key, connect your phone (Android: scan the QR with the **Camera** app —
+   it opens the ntfy app pre-filled; iPhone: the page walks you through the
+   manual add), send the test notification.
+
+**One setting matters**: the pup's **Server base URL** config must be the
+address phones actually use (Tailscale address or LAN IP). If it is left
+empty on some setups, the box auto-detects an internal address that phones
+cannot reach — notifications then only arrive while the app is open. The
+onboarding page shows the address it is advertising.
 
 That's the whole setup. No terminal.
 
