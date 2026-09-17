@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "meta": {
     "name": "ntfy",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "logoPath": "logo.png",
     "shortDescription": "Self-hosted push notifications: anything on your box can ping your phone",
     "longDescription": "Runs your own ntfy notification server. Any pup, service or script on the box can send a push notification to your phone with one HTTP POST — pup crashes, recoveries and updates arrive automatically via the built-in health bridge. Private (token auth, deny-all by default), LAN-first, iOS + Android instant delivery.",

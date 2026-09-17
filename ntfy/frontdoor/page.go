@@ -34,9 +34,9 @@ const onboardingHTML = `<!doctype html>
   button { background:var(--gold); border:0; color:#171410; font-weight:600; border-radius:8px; padding:10px 16px; cursor:pointer; font-size:0.95rem; }
   button:hover { filter:brightness(1.08); }
   button.ghost { background:transparent; border:1px solid var(--line); color:var(--text); }
-  #qrcode { background:#fff; display:inline-block; padding:12px; border-radius:12px; margin-top:8px; }
-  #qrcode svg { display:block; width:200px; height:200px; }
-  #qrcode::before { content:" "; }
+  .qrbox { background:#fff; display:inline-block; padding:16px; border-radius:12px; margin-top:8px; }
+  .qrbox svg { display:block; width:260px; height:260px; }
+  .qrlabel { margin:6px 0 0; font-size:0.85rem; }
   .muted { color:var(--dim); font-size:0.92rem; }
   a { color:var(--gold); }
   input[type=password],input[type=text] { flex:1; width:100%; background:#14110c; border:1px solid var(--line); color:var(--text); border-radius:8px; padding:10px 12px; font-size:0.95rem; margin-top:10px; }
@@ -86,19 +86,24 @@ const onboardingHTML = `<!doctype html>
         <li>A link pops up on screen — <b>tap it</b>. The ntfy app opens with everything already filled in.</li>
         <li>Tap <b>Subscribe</b>. A login box appears: for <b>Username</b> type anything (for example <span class="mono">token</span>), for <b>Password</b> <b>paste the key</b> you copied in step 2.</li>
       </ol>
-      <div id="qrcode"><noscript>Enable JavaScript to see the QR code, or copy the link below.</noscript></div>
-      <p class="muted center">↑ point your phone's camera here</p>
+      <div id="qrcode" class="qrbox"><noscript>Enable JavaScript to see the QR code, or copy the link below.</noscript></div>
+      <p class="muted qrlabel">↑ point your phone's camera here — hold it steady about 15&nbsp;cm away</p>
       <p class="muted">Nothing happened when you scanned? In the ntfy app tap <b>+</b>, enter topic <span class="mono">{{TOPIC}}</span>, switch on <i>Use another server</i> and paste this:</p>
       <div class="row"><code id="server-url">{{HOST_URL}}</code><button class="ghost" onclick="copyText('server-url', this)">Copy</button></div>
     </div>
 
     <div class="platform">
       <h3>🍎 iPhone</h3>
+      <p class="muted">The iPhone app can't open scanned links, so don't use the Android QR — instead, put this page on your phone so the copy buttons work right where you need them:</p>
+      <div id="qrcode-page" class="qrbox"><noscript>Enable JavaScript to see the QR code, or type the server address below into your phone's browser.</noscript></div>
+      <p class="muted qrlabel">↑ scan this with the Camera app — it opens this page in Safari, on your phone</p>
       <ol>
-        <li>In the ntfy app tap <b>+</b> (top right).</li>
+        <li>Scan the code above (or open <span class="mono">{{HOST_URL}}</span> in Safari on the iPhone).</li>
+        <li>On this page (now on your phone): tap <b>Copy</b> next to the key in step 2.</li>
+        <li>Open the ntfy app, tap <b>+</b> (top right).</li>
         <li>Under <b>Topic</b> enter: <span class="mono">{{TOPIC}}</span></li>
         <li>Turn on <b>Use another server</b> (or switch off the default server) and enter: <span class="mono">{{HOST_URL}}</span></li>
-        <li>Tap <b>Subscribe</b>. If a login box appears: <b>Username</b> anything (e.g. <span class="mono">token</span>), <b>Password</b> — paste the key from step 2.</li>
+        <li>Tap <b>Subscribe</b>. If a login box appears: <b>Username</b> anything (e.g. <span class="mono">token</span>), <b>Password</b> — paste the key.</li>
         <li>If it does not ask for a login right away: open <b>Settings → Manage users → +</b>, enter server <span class="mono">{{HOST_URL}}</span>, choose the <b>API key / token</b> login type, and paste the key.</li>
       </ol>
     </div>
@@ -150,14 +155,21 @@ const onboardingHTML = `<!doctype html>
 <script>
 var TOKEN = {{TOKEN_JSON}};
 var QR_DATA = {{QR_JSON}};
-try {
-  var qr = qrcode(0, 'M');
-  qr.addData(QR_DATA);
-  qr.make();
-  document.getElementById('qrcode').innerHTML = qr.createSvgTag({cellSize: 4, scalable: true});
-} catch (e) {
-  document.getElementById('qrcode').textContent = 'QR error: ' + e;
+// EC level L: screens scan cleanly (no wear/damage to guard against) and L
+// packs the payload into fewer modules, so cameras resolve it from farther
+// away — a dense code was unreadable in the field ("No usable data found").
+function renderQR(id, data) {
+  try {
+    var qr = qrcode(0, 'L');
+    qr.addData(data);
+    qr.make();
+    document.getElementById(id).innerHTML = qr.createSvgTag({cellSize: 4, scalable: true});
+  } catch (e) {
+    document.getElementById(id).textContent = 'QR error: ' + e;
+  }
 }
+renderQR('qrcode', QR_DATA);
+renderQR('qrcode-page', '{{HOST_URL}}/');
 function copyText(id, btn) {
   var text = document.getElementById(id).textContent.trim();
   var done = function () {
