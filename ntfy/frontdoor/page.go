@@ -5,10 +5,14 @@ package main
 // consts so frontdoor.go stays readable; no backticks anywhere (Go raw
 // strings), no external assets except the embedded QR library at /__qr.js.
 //
-// Written for someone who has never heard of ntfy: every step says exactly
-// what to tap, on which device, and what they should see. Order matters —
-// the key is copied in step 2 so it is already on the clipboard when the
-// app asks for it in step 3.
+// Designed around field reality: iOS Safari force-upgrades http:// to
+// https:// and then dies with an SSL error against this intentionally
+// plain-HTTP box — so the page is written to be read on a COMPUTER screen
+// and never asks anyone to open it on a phone. The phone-side flow uses
+// only things that cannot hit that trap: the ntfy app itself (plain HTTP),
+// the Camera app scanning a plain-TEXT key QR (Camera shows a Copy button
+// for text QRs — nothing opens), and on Android the ntfy:// deep link
+// (Camera hands it straight to the app, no browser).
 
 const onboardingHTML = `<!doctype html>
 <html lang="en">
@@ -20,7 +24,7 @@ const onboardingHTML = `<!doctype html>
   :root { --gold:{{GOLD}}; --bg:#171410; --card:#201c15; --line:#3a3325; --text:#efe9dc; --dim:#a89e88; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
-  main { max-width:680px; margin:0 auto; padding:28px 20px 72px; }
+  main { max-width:720px; margin:0 auto; padding:28px 20px 72px; }
   h1 { font-size:1.65rem; margin:14px 0 4px; }
   h1 .dot { color:var(--gold); }
   p.sub { color:var(--dim); margin:0 0 26px; }
@@ -50,18 +54,22 @@ const onboardingHTML = `<!doctype html>
   li { margin:6px 0; }
   .platform { border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-top:10px; }
   .platform h3 { margin:0 0 6px; font-size:0.95rem; }
+  .note { border:1px solid var(--line); border-left:3px solid var(--gold); border-radius:10px; padding:10px 14px; margin-bottom:20px; }
   form.inline { display:inline; }
-  .center { text-align:center; }
 </style>
 </head>
 <body>
 <main>
   <h1>Notifications on your phone<span class="dot">.</span></h1>
-  <p class="sub">Your Dogebox can send real push notifications — when a pup crashes or recovers, when updates land, or from anything you connect. This page wires it up in four short steps. About 3 minutes, no terminal, nothing to type by hand.</p>
+  <p class="sub">Your Dogebox can send real push notifications — when a pup crashes or recovers, when updates land, or from anything you connect. Four short steps, about 3 minutes, no terminal.</p>
+
+  <div class="note">
+    <b>Reading this on your phone?</b> If it refuses to open (an &ldquo;SSL error&rdquo;), that is your phone forcing encryption this private box intentionally doesn't speak. No problem — <b>you never need this page on your phone.</b> Open it on a computer instead; your phone only needs its ntfy app and its Camera, and everything below works from there.
+  </div>
 
   <div class="card">
     <div class="step"><span class="num">1</span><h2>Install the ntfy app on your phone</h2></div>
-    <p class="muted">ntfy is the free app that shows your box's messages as normal notifications. Install it from your phone's app store:</p>
+    <p class="muted">ntfy is the free app that shows your box's messages as normal notifications:</p>
     <ul>
       <li><a href="https://play.google.com/store/apps/details?id=io.heckel.ntfy" target="_blank" rel="noopener">Android — get it on Google Play</a></li>
       <li><a href="https://apps.apple.com/app/ntfy/id1625396347" target="_blank" rel="noopener">iPhone — get it on the App Store</a></li>
@@ -70,42 +78,59 @@ const onboardingHTML = `<!doctype html>
   </div>
 
   <div class="card">
-    <div class="step"><span class="num">2</span><h2>Copy your private key</h2></div>
-    <p class="muted">Your box is private — only devices holding this key may connect. Copy it now so it is ready when the app asks in step 3:</p>
-    <div class="row"><code id="token">{{TOKEN}}</code><button class="ghost" onclick="copyText('token', this)">Copy</button></div>
-    <p class="muted">The same key works on every phone in your house. (When all your phones are connected you can hide this page's secrets — see the bottom.)</p>
-  </div>
-
-  <div class="card">
-    <div class="step"><span class="num">3</span><h2>Connect your phone</h2></div>
+    <div class="step"><span class="num">2</span><h2>Put the key on your phone</h2></div>
+    <p class="muted">Your box is private — only devices holding this key may connect. The app will ask for it in step 3. Two easy ways to get it there:</p>
 
     <div class="platform">
-      <h3>📱 Android</h3>
+      <h3>✨ Easiest — same Apple ID on this computer and your iPhone?</h3>
       <ol>
-        <li>Open the <b>Camera</b> app and point it at this code.</li>
-        <li>A link pops up on screen — <b>tap it</b>. The ntfy app opens with everything already filled in.</li>
-        <li>Tap <b>Subscribe</b>. A login box appears: for <b>Username</b> type anything (for example <span class="mono">token</span>), for <b>Password</b> <b>paste the key</b> you copied in step 2.</li>
+        <li>Click <b>Copy</b> below (on this computer).</li>
+        <li>On your iPhone, open <b>Notes</b> (or Messages, or anything with a keyboard) and <b>paste</b>. The key appears — Universal Clipboard carried it over.</li>
       </ol>
-      <div id="qrcode" class="qrbox"><noscript>Enable JavaScript to see the QR code, or copy the link below.</noscript></div>
-      <p class="muted qrlabel">↑ point your phone's camera here — hold it steady about 15&nbsp;cm away</p>
-      <p class="muted">Nothing happened when you scanned? In the ntfy app tap <b>+</b>, enter topic <span class="mono">{{TOPIC}}</span>, switch on <i>Use another server</i> and paste this:</p>
-      <div class="row"><code id="server-url">{{HOST_URL}}</code><button class="ghost" onclick="copyText('server-url', this)">Copy</button></div>
     </div>
 
     <div class="platform">
-      <h3>🍎 iPhone</h3>
-      <p class="muted">The iPhone app can't open scanned links, so don't use the Android QR — instead, put this page on your phone so the copy buttons work right where you need them:</p>
-      <div id="qrcode-page" class="qrbox"><noscript>Enable JavaScript to see the QR code, or type the server address below into your phone's browser.</noscript></div>
-      <p class="muted qrlabel">↑ scan this with the Camera app — it opens this page in Safari, on your phone</p>
+      <h3>📷 Works on every phone — scan the key</h3>
       <ol>
-        <li>Scan the code above (or open <span class="mono">{{HOST_URL}}</span> in Safari on the iPhone).</li>
-        <li>On this page (now on your phone): tap <b>Copy</b> next to the key in step 2.</li>
-        <li>Open the ntfy app, tap <b>+</b> (top right).</li>
+        <li>Open the <b>Camera</b> app and point it at this code.</li>
+        <li>The key appears <b>as text</b> on the phone — tap <b>Copy</b> (on iPhone) or tap the text then copy (Android). Nothing opens; nothing loads. You're just grabbing text.</li>
+      </ol>
+      <div id="qrcode-key" class="qrbox"><noscript>Enable JavaScript to see the QR code.</noscript></div>
+      <p class="muted qrlabel">↑ the key as plain text — your Camera app can copy it directly</p>
+    </div>
+
+    <div class="row"><code id="token">{{TOKEN}}</code><button class="ghost" onclick="copyText('token', this)">Copy</button></div>
+    <p class="muted">The same key works on every phone in your house. (Once all your phones are connected, hide it — see the bottom of this page.)</p>
+  </div>
+
+  <div class="card">
+    <div class="step"><span class="num">3</span><h2>In the app, add this server</h2></div>
+    <p class="muted">These two values go into the app — the server address you'll type, the topic it fills in for you:</p>
+    <div class="row"><code id="server-url">{{HOST_URL}}</code><button class="ghost" onclick="copyText('server-url', this)">Copy</button></div>
+    <p class="muted">Topic: <span class="mono">{{TOPIC}}</span></p>
+
+    <div class="platform">
+      <h3>🤖 Android — fast way</h3>
+      <ol>
+        <li>Point the <b>Camera</b> app at this code — a link pops up.</li>
+        <li><b>Tap the link</b> (not &ldquo;open in browser&rdquo;) — the ntfy app opens with everything filled in.</li>
+        <li>Tap <b>Subscribe</b>. Login box: <b>Username</b> anything (e.g. <span class="mono">token</span>), <b>Password</b> — paste the key from step 2.</li>
+      </ol>
+      <div id="qrcode-link" class="qrbox"><noscript>Enable JavaScript to see the QR code.</noscript></div>
+      <p class="muted qrlabel">↑ hands the topic straight to the ntfy app — no browser involved</p>
+      <p class="muted">Link didn't open the app? Use the manual steps below — they work identically on Android.</p>
+    </div>
+
+    <div class="platform">
+      <h3>📱 Manual steps — identical on iPhone and Android</h3>
+      <ol>
+        <li>In the ntfy app tap <b>+</b> (top right).</li>
         <li>Under <b>Topic</b> enter: <span class="mono">{{TOPIC}}</span></li>
         <li>Turn on <b>Use another server</b> (or switch off the default server) and enter: <span class="mono">{{HOST_URL}}</span></li>
-        <li>Tap <b>Subscribe</b>. If a login box appears: <b>Username</b> anything (e.g. <span class="mono">token</span>), <b>Password</b> — paste the key.</li>
-        <li>If it does not ask for a login right away: open <b>Settings → Manage users → +</b>, enter server <span class="mono">{{HOST_URL}}</span>, choose the <b>API key / token</b> login type, and paste the key.</li>
+        <li>Tap <b>Subscribe</b>. A login box appears: <b>Username</b> anything (e.g. <span class="mono">token</span>), <b>Password</b> — <b>paste the key</b> from step 2.</li>
+        <li>No login box? Open <b>Settings → Manage users → +</b> (iPhone) or long-press the subscription → <b>Settings</b> (Android): server <span class="mono">{{HOST_URL}}</span>, choose the <b>API key / token</b> type, paste the key.</li>
       </ol>
+      <p class="muted">Don't have the key on the phone yet? Go back to step 2 — it takes ten seconds.</p>
     </div>
   </div>
 
@@ -118,12 +143,13 @@ const onboardingHTML = `<!doctype html>
   </div>
 
   <details class="card">
-    <summary>Not working? Start here <span class="muted">(the four common problems)</span></summary>
+    <summary>Not working? Start here <span class="muted">(the five common problems)</span></summary>
     <ul>
-      <li><b>The link didn't open anything.</b> Use the manual steps for your phone in step 3 instead — they take 30 seconds and always work.</li>
+      <li><b>&ldquo;An SSL error has occurred&rdquo; on the phone.</b> You tried to open this page (or the server) in a phone browser. Phones force HTTPS; this box is deliberately plain HTTP on your private network. Nothing is broken — close the browser and use the app-only steps above.</li>
       <li><b>The subscription shows a red icon or an error.</b> The key was pasted incorrectly. Android: long-press the subscription → <i>Settings</i> → re-enter the key as the password. iPhone: <i>Settings → Manage users</i> → tap your user → re-paste.</li>
-      <li><b>Messages only arrive while the app is open (Android).</b> Your phone is putting ntfy to sleep. Phone <i>Settings → Apps → ntfy → Battery</i> → choose <b>Unrestricted</b> (or disable battery optimization). Also keep <i>Instant delivery</i> switched on for the subscription.</li>
-      <li><b>Nothing arrives at all.</b> Your phone must be able to reach the box: same home network, or connected to Tailscale if you set the server up for it. Test by opening <span class="mono">{{HOST_URL}}</span> in your phone's browser — you should see this page.</li>
+      <li><b>Messages only arrive while the app is open (Android).</b> Your phone is putting ntfy to sleep. Phone <i>Settings → Apps → ntfy → Battery</i> → choose <b>Unrestricted</b>. Keep <i>Instant delivery</i> switched on for the subscription.</li>
+      <li><b>Nothing arrives at all.</b> The phone must be able to reach the box: same home network, or Tailscale connected (the server address starts with <span class="mono">100.</span>? That one is Tailscale-only).</li>
+      <li><b>Scanning a code did nothing.</b> Phone cameras are picky about screens. Hold steady, ~15&nbsp;cm away, brightness up. Or skip scanning entirely — everything the codes contain is also written as text on this page.</li>
     </ul>
   </details>
 
@@ -142,7 +168,7 @@ const onboardingHTML = `<!doctype html>
   -H "Title: dogebox" -H "Tags: white_check_mark" \
   -H "Authorization: Bearer {{TOKEN}}" \
   {{HOST_URL}}/my-topic</pre>
-    <p class="muted">Any ntfy integration works — scripts, cron, Home Assistant, Uptime Kuma, CI — just point it at this server with the key from step 2. Extra topics are free-form: send to <span class="mono">/any-topic-name</span>, then subscribe to it in the app exactly like you did in step 3.</p>
+    <p class="muted">Any ntfy integration works — scripts, cron, Home Assistant, Uptime Kuma, CI — just point it at this server with the key from step 2. Extra topics are free-form: send to <span class="mono">/any-topic-name</span>, then add it in the app exactly like step 3.</p>
   </details>
 
   <div class="card">
@@ -155,9 +181,8 @@ const onboardingHTML = `<!doctype html>
 <script>
 var TOKEN = {{TOKEN_JSON}};
 var QR_DATA = {{QR_JSON}};
-// EC level L: screens scan cleanly (no wear/damage to guard against) and L
-// packs the payload into fewer modules, so cameras resolve it from farther
-// away — a dense code was unreadable in the field ("No usable data found").
+// EC level L: screens scan cleanly (no wear to guard against) and L packs
+// payloads into fewer modules, so cameras resolve them from farther away.
 function renderQR(id, data) {
   try {
     var qr = qrcode(0, 'L');
@@ -168,8 +193,8 @@ function renderQR(id, data) {
     document.getElementById(id).textContent = 'QR error: ' + e;
   }
 }
-renderQR('qrcode', QR_DATA);
-renderQR('qrcode-page', '{{HOST_URL}}/');
+renderQR('qrcode-key', TOKEN);
+renderQR('qrcode-link', QR_DATA);
 function copyText(id, btn) {
   var text = document.getElementById(id).textContent.trim();
   var done = function () {

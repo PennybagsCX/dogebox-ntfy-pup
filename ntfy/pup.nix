@@ -126,7 +126,7 @@ let
 
   frontdoor = pkgs.buildGoModule {
     pname = "frontdoor";
-    version = "0.0.1";
+    version = "0.0.4";
     src = ./frontdoor;
     vendorHash = null;
 
